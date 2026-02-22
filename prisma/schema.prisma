@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  email     String    @unique
+  password  String
+  name      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  licenses  License[]
+}
+
+model License {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  key             String    @unique
+  userId          String    @db.ObjectId
+  user            User      @relation(fields: [userId], references: [id])
+  plan            String    // "monthly" | "annual"
+  status          String    @default("inactive") // "inactive" | "active" | "expired" | "cancelled"
+  activatedAt     DateTime?
+  expiresAt       DateTime?
+  machineId       String?   // locked to first machine that activates this key
+  stripeSessionId String?   @unique
+  stripePaymentId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([machineId])
+}

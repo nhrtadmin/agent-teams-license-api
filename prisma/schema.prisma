@@ -8,13 +8,15 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(auto()) @map("_id") @db.ObjectId
-  email     String    @unique
-  password  String
-  name      String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  licenses  License[]
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  email         String         @unique
+  password      String
+  name          String?
+  role          String         @default("user") // "user" | "admin"
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  licenses      License[]
+  licenseUsages LicenseUsage[]
 }
 
 model License {
@@ -29,9 +31,41 @@ model License {
   machineId       String?   // locked to first machine that activates this key
   stripeSessionId String?   @unique
   stripePaymentId String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  tokenLimit      Int?           // max tokens per billing period; null = no limit
+  tokenPeriodDays Int?           @default(30) // billing period in days for token limit
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  usages          LicenseUsage[]
 
   @@index([userId])
   @@index([machineId])
+}
+
+model LlmApiKey {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String   // e.g. "Production", "Backup"
+  apiKey      String   // stored encrypted or as-is (secure your DB)
+  provider    String   @default("anthropic") // anthropic | openai | ...
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model LicenseUsage {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  licenseId    String   @db.ObjectId
+  license      License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  userId       String   @db.ObjectId
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  model        String?
+  createdAt    DateTime @default(now())
+
+  @@index([licenseId])
+  @@index([userId])
+  @@index([createdAt])
 }

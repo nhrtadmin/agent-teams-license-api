@@ -29,6 +29,7 @@ export interface ValidateResult {
   plan?: string;
   email?: string;
   licenseId?: string;
+  userId?: string;
 }
 
 export async function validateLicense(
@@ -78,5 +79,52 @@ export async function validateLicense(
     plan: license.plan,
     email: license.user.email,
     licenseId: license.id,
+    userId: license.userId,
   };
+}
+
+/** Check if license has exceeded token limit in current period */
+export async function checkTokenLimit(licenseId: string): Promise<{ allowed: boolean; used: number; limit: number | null }> {
+  const license = await prisma.license.findUnique({
+    where: { id: licenseId },
+    select: { tokenLimit: true, tokenPeriodDays: true },
+  });
+  if (!license || license.tokenLimit == null) {
+    return { allowed: true, used: 0, limit: null };
+  }
+  const periodDays = license.tokenPeriodDays ?? 30;
+  const since = new Date();
+  since.setDate(since.getDate() - periodDays);
+  const sum = await prisma.licenseUsage.aggregate({
+    where: {
+      licenseId,
+      createdAt: { gte: since },
+    },
+    _sum: { inputTokens: true, outputTokens: true },
+  });
+  const used = (sum._sum.inputTokens ?? 0) + (sum._sum.outputTokens ?? 0);
+  return {
+    allowed: used < license.tokenLimit,
+    used,
+    limit: license.tokenLimit,
+  };
+}
+
+/** Record usage for a license */
+export async function recordUsage(
+  licenseId: string,
+  userId: string,
+  inputTokens: number,
+  outputTokens: number,
+  model?: string
+): Promise<void> {
+  await prisma.licenseUsage.create({
+    data: {
+      licenseId,
+      userId,
+      inputTokens,
+      outputTokens,
+      model: model ?? null,
+    },
+  });
 }
